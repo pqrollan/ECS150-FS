@@ -1,6 +1,34 @@
-# Target library
 lib := libfs.a
+objs := disk.o fs.o
+
+CC := gcc
+CFLAGS := -Wall -Werror -Wextra -pipe -pthread
+ifneq ($(D),1)
+CFLAGS += -O2
+else
+CFLAGS += -g
+endif
+
+ARCHIVE := ar rcs
+
+ifneq ($(V),1)
+Q = @
+endif
 
 all: $(lib)
 
-## TODO: Phase 1
+deps := $(patsubst %.o, %.d,$(objs))
+-include $(deps)
+DEPFLAGS = -MMD -MF $(@:.o=.d)
+
+$(lib): $(objs)
+	@echo "Archive	$@"
+	$(Q)$(ARCHIVE) $@ $^
+
+%.o: %.c
+	@echo "CC	$@"
+	$(Q)$(CC) $(CFLAGS) -c -o $@ $< $(DEPFLAGS)
+
+clean:
+	@echo "CLEAN"
+	$(Q)rm -f $(lib) $(objs) $(deps)
