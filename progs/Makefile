@@ -1,5 +1,5 @@
 # Target programs
-programs := test_fs_p1.x
+programs := test_fs_p2.x
 #programs := test_fs.x 
 
 # File-system library

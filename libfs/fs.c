@@ -17,6 +17,7 @@
 //#define FS_OPEN_MAX_COUNT 32
 
 #define BLOCK_SIZE 4096
+#define FAT_EOC 65535
 
 /* TODO: Phase 1 */
 struct __attribute__ ((__packed__)) SuperBlock {
@@ -58,7 +59,7 @@ int fs_mount(const char *diskname)
                 return -1;
         }
         
-        printf("%d\n", block_read(0, &superblock));
+        block_read(0, &superblock);
         
         if (block_disk_count() != superblock.blockcount) {
                 return -1;
@@ -71,7 +72,7 @@ int fs_mount(const char *diskname)
         fat = malloc(2 * superblock.datablockcount);
         for (int i = 0; i < superblock.fatblocks; i++) {
 	        block_read(1 + i, &fat[(i * BLOCK_SIZE)/2]);
-        }
+        } 
 
         block_read(superblock.rootdirindex, rootdir);
 
@@ -145,10 +146,50 @@ int fs_info(void)
  * or if string @filename is too long, or if the root directory already contains
  * %FS_FILE_MAX_COUNT files. 0 otherwise.
  */
-/*int fs_create(const char *filename)
+int fs_create(const char *filename)
 {
+        if (filename == NULL) {
+                return -1;
+        }
+
+        int filenamelen = strlen(filename);
+        if (filenamelen > FS_FILENAME_LEN || filenamelen < 1) {
+                return -1;
+        }
+        
+        for (int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+                if(!strcmp(filename, rootdir[i].filename)) {
+                        return -1;
+                }
+        }
+
+        int index = -1;
+        for(int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+                if (rootdir[i].filename[0] == 0) {
+                        index = i;
+                        break;
+                }
+        }
+
+        if (index == -1) {
+               return -1; 
+        }
+
+        strcpy(rootdir[index].filename, filename);
+        rootdir[index].size = 0;
+
+        int fatindex = -1;
+        for (int i = 1; i < superblock.datablockcount; i++) {
+                if (fat[i] == 0) {
+                        fatindex = i;
+                        fat[fatindex] = FAT_EOC;
+                        break;
+                }
+        }
+        rootdir[index].index = fatindex;
+
         return 0;
-}*/
+}
 
 /** TODO: Phase 2
  * fs_delete - Delete a file
@@ -160,10 +201,38 @@ int fs_info(void)
  * Return: -1 if @filename is invalid, if there is no file named @filename to
  * delete, or if file @filename is currently open. 0 otherwise.
  */
-/*int fs_delete(const char *filename)
+int fs_delete(const char *filename)
 {
+        if (filename == NULL || strlen(filename) < 1) {
+                return -1;
+        }
+
+        int index = -1;
+        for(int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+                if (!strcmp(filename, rootdir[i].filename)) {
+                        index = i;
+                        break;
+                }
+        }
+
+        if (index == -1) {
+               return -1; 
+        }
+
+        int fatindex = rootdir[index].index;
+        while (fat[fatindex] != FAT_EOC) {
+                int temp = fatindex;
+                fatindex = fat[fatindex];
+                fat[temp] = 0;
+        }
+        fat[fatindex] = 0;
+        
+        rootdir[index].index = 0;
+        rootdir[index].size = 0;
+        memset(rootdir[index].filename, 0, FS_FILENAME_LEN);
+
         return 0;
-}*/
+}
 
 /** TODO: Phase 2
  * fs_ls - List files on file system
@@ -172,10 +241,22 @@ int fs_info(void)
  *
  * Return: -1 if no underlying virtual disk was opened. 0 otherwise.
  */
-/*int fs_ls(void)
+int fs_ls(void)
 {
+        if (rootdir == NULL) {
+               return -1; 
+        }
+
+        for(int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+                if (rootdir[i].filename[0] == 0) {
+                        continue;
+                }
+                printf("%s- size:%d, FAT index:%d\n", rootdir[i].filename,
+                        rootdir[i].size, rootdir[i].index);
+        }
+
         return 0;
-}*/
+}
 
 /** TODO: Phase 3
  * fs_open - Open a file
