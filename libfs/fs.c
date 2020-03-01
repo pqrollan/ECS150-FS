@@ -37,6 +37,15 @@ struct __attribute__ ((__packed__)) FEntry {
         uint8_t padding[10];
 };
 
+struct fileDescriptor{
+        char filename[16];
+        int offset;
+        uint16_t fileIndex;
+
+};
+
+struct fileDescriptor FDArray[32];
+
 struct SuperBlock superblock;
 uint16_t *fat = NULL;
 struct FEntry rootdir[128];
@@ -75,6 +84,10 @@ int fs_mount(const char *diskname)
         } 
 
         block_read(superblock.rootdirindex, rootdir);
+
+        for (int i =0; i< FS_OPEN_MAX_COUNT; i++){
+                memset(FDArray[i].filename, 0, FS_FILENAME_LEN);
+        }
 
         return 0;
 }
@@ -274,10 +287,40 @@ int fs_ls(void)
  * or if there are already %FS_OPEN_MAX_COUNT files currently open. Otherwise,
  * return the file descriptor.
  */
-/*int fs_open(const char *filename)
+int fs_open(const char *filename)
 {
-        return 0;
-}*/
+        if (filename == NULL || strlen(filename) < 1) {
+                return -1;
+        }
+
+        int index = -1;
+        for(int i = 0; i < FS_FILE_MAX_COUNT; i++) {
+                if (!strcmp(filename, rootdir[i].filename)) {
+                        index = i;
+                        break;
+                }
+        }
+        if (index == -1) {
+               return -1; 
+        }
+
+        int FDIndex= -1;
+        for (int i=0; i<FS_OPEN_MAX_COUNT; i++){
+                if (FDArray[i].filename == NULL){
+                        FDIndex = i;
+                        break;
+                }
+        }
+        if (FDIndex == -1){
+                return -1;
+        }
+
+        strcpy(FDArray[FDIndex].filename, filename);
+        FDArray[FDIndex].offset= 0;
+        FDArray[FDIndex].fileIndex= index;
+
+        return FDIndex;
+}
 
 /** TODO: Phase 3
  * fs_close - Close a file
@@ -288,10 +331,17 @@ int fs_ls(void)
  * Return: -1 if file descriptor @fd is invalid (out of bounds or not currently
  * open). 0 otherwise.
  */
-/*int fs_close(int fd)
+int fs_close(int fd)
 {
+        if (fd<0 || fd>31 || FDArray[fd].filename==NULL){
+                return -1;
+        }
+
+        memset(FDArray[fd].filename, 0, FS_FILENAME_LEN);
+        FDArray[fd].offset=0;
+        FDArray[fd].fileIndex = FS_FILE_MAX_COUNT;
         return 0;
-}*/
+}
 
 /** TODO: Phase 3
  * fs_stat - Get file status
@@ -302,10 +352,14 @@ int fs_ls(void)
  * Return: -1 if file descriptor @fd is invalid (out of bounds or not currently
  * open). Otherwise return the current size of file.
  */
-/*int fs_stat(int fd)
+int fs_stat(int fd)
 {
-        return 0;
-}*/
+        if (fd<0 || fd>31 || FDArray[fd].filename==NULL){
+                return -1;
+        }
+
+        return rootdir[FDArray[fd].fileIndex].size;
+}
 
 /** TODO: Phase 3
  * fs_lseek - Set file offset
@@ -320,10 +374,19 @@ int fs_ls(void)
  * currently open), or if @offset is larger than the current file size. 0
  * otherwise.
  */
-/*int fs_lseek(int fd, size_t offset)
+int fs_lseek(int fd, size_t offset)
 {
+        if (fd<0 || fd>31 || FDArray[fd].filename==NULL){
+                return -1;
+        }
+        if (offset > (size_t) fs_stat(fd)){
+                return -1;
+        }
+
+        FDArray[fd].offset = offset;
+        
         return 0;
-}*/
+}
 
 /** TODO: Phase 4
  * fs_write - Write to a file
