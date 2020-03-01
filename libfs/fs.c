@@ -6,6 +6,7 @@
 
 #include "disk.h"
 #include "fs.h"
+#include "fs1.h"
 
 /** Maximum filename length (including the NULL character) */
 //#define FS_FILENAME_LEN 16
@@ -306,7 +307,7 @@ int fs_open(const char *filename)
 
         int FDIndex= -1;
         for (int i=0; i<FS_OPEN_MAX_COUNT; i++){
-                if (FDArray[i].filename == NULL){
+                if (!strcmp(FDArray[i].filename, "")){
                         FDIndex = i;
                         break;
                 }
@@ -333,7 +334,7 @@ int fs_open(const char *filename)
  */
 int fs_close(int fd)
 {
-        if (fd<0 || fd>31 || FDArray[fd].filename==NULL){
+        if (fd<0 || fd>31 || !strcmp(FDArray[fd].filename, "")){
                 return -1;
         }
 
@@ -341,6 +342,20 @@ int fs_close(int fd)
         FDArray[fd].offset=0;
         FDArray[fd].fileIndex = FS_FILE_MAX_COUNT;
         return 0;
+}
+
+void print_fdarray(void)
+{
+        for (int i=0; i<FS_OPEN_MAX_COUNT; i++){
+                if (strcmp(FDArray[i].filename, "")) {
+                        printf("Filename: %s\n", FDArray[i].filename);
+                        printf("File Descriptor: %d\n", i);
+                        printf("File Offset: %d\n", FDArray[i].offset);
+                        printf("Root Directory Index: %d\n",
+                        FDArray[i].fileIndex);
+                }
+        }
+
 }
 
 /** TODO: Phase 3
@@ -354,7 +369,7 @@ int fs_close(int fd)
  */
 int fs_stat(int fd)
 {
-        if (fd<0 || fd>31 || FDArray[fd].filename==NULL){
+        if (fd<0 || fd>31 || !strcmp(FDArray[fd].filename, "")){
                 return -1;
         }
 
@@ -376,7 +391,7 @@ int fs_stat(int fd)
  */
 int fs_lseek(int fd, size_t offset)
 {
-        if (fd<0 || fd>31 || FDArray[fd].filename==NULL){
+        if (fd<0 || fd>31 || !strcmp(FDArray[fd].filename, "")){
                 return -1;
         }
         if (offset > (size_t) fs_stat(fd)){
