@@ -488,6 +488,8 @@ int alloc_blocks(int fd, size_t offset, size_t size)
 
         fat[db] = FAT_EOC;
 
+        printf("Allocated %d blocks\n", alloc_count);
+
         return alloc_count;
 }
 
