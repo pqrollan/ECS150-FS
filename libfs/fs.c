@@ -18,7 +18,7 @@
 //#define FS_OPEN_MAX_COUNT 32
 
 #define BLOCK_SIZE 4096
-#define FAT_EOC 65535
+#define FAT_EOC 0xFFFF
 
 /* TODO: Phase 1 */
 struct __attribute__ ((__packed__)) SuperBlock {
@@ -78,8 +78,10 @@ int fs_mount(const char *diskname)
         if (memcmp(superblock.signature, "ECS150FS", 8)) {
                 return -1;
         }
+        
 
-        fat = malloc(2 * superblock.datablockcount);
+
+        fat = malloc(superblock.fatblocks * BLOCK_SIZE);
         for (int i = 0; i < superblock.fatblocks; i++) {
 	        block_read(1 + i, &fat[(i * BLOCK_SIZE)/2]);
         } 
@@ -344,6 +346,8 @@ int fs_close(int fd)
         return 0;
 }
 
+
+/* REMOVE BEFORE SUBMISSION? */
 void print_fdarray(void)
 {
         for (int i=0; i<FS_OPEN_MAX_COUNT; i++){
@@ -403,6 +407,31 @@ int fs_lseek(int fd, size_t offset)
         return 0;
 }
 
+int get_datablock(int fd, size_t offset)
+{
+        int fatindex = rootdir[FDArray[fd].fileIndex].index;
+
+        while (1) {
+                if (offset < BLOCK_SIZE) {
+                        break;
+                } else {
+                        fatindex = fat[fatindex];
+                        offset -= BLOCK_SIZE;
+                }
+        }
+
+        return fatindex;
+}
+
+size_t min(size_t a, size_t b)
+{
+        if (a < b) {
+                return a;
+        } else {
+                return b;
+        }
+}
+
 /** TODO: Phase 4
  * fs_write - Write to a file
  * @fd: File descriptor
@@ -422,10 +451,10 @@ int fs_lseek(int fd, size_t offset)
  * Return: -1 if file descriptor @fd is invalid (out of bounds or not currently
  * open). Otherwise return the number of bytes actually written.
  */
-/*int fs_write(int fd, void *buf, size_t count)
+int fs_write(int fd, void *buf, size_t count)
 {
         return 0;
-}*/
+}
 
 /** TODO: Phase 4
  * fs_read - Read from a file
@@ -445,7 +474,35 @@ int fs_lseek(int fd, size_t offset)
  * Return: -1 if file descriptor @fd is invalid (out of bounds or not currently
  * open). Otherwise return the number of bytes actually read.
  */
-/*int fs_read(int fd, void *buf, size_t count)
+int fs_read(int fd, void *buf, size_t count)
 {
-        return 0;
-}*/
+        if (fd<0 || fd>31 || !strcmp(FDArray[fd].filename, "")){
+                return -1;
+        }
+
+        size_t offset = FDArray[fd].offset;
+        int db = get_datablock(fd, offset);
+        size_t num_read = 0;
+        char page_buffer[BLOCK_SIZE];
+
+        //printf("%ld\n%d\n%ld\n", offset, db, num_read);
+
+        while (num_read < count) {
+                size_t block_offset = offset % BLOCK_SIZE;
+                size_t num_to_read = min(BLOCK_SIZE - block_offset, count - num_read);
+
+                block_read(db + superblock.datablockindex, page_buffer);
+                memcpy(buf + num_read, &page_buffer[block_offset],
+                        num_to_read);
+
+                num_read += num_to_read;
+                db = fat[db];
+                if (db == FAT_EOC) {
+                        break;
+                }
+        }
+        
+        FDArray[fd].offset = offset;
+
+        return num_read;
+}
