@@ -452,39 +452,54 @@ int alloc_blocks(int fd, size_t offset, size_t size)
         size_t block_offset = offset % BLOCK_SIZE;
         
         if (size > BLOCK_SIZE - block_offset) {
+                printf("Going to write in multiple blocks\n");
                 size -= BLOCK_SIZE - block_offset;
         } else {
                 return alloc_count;
         }
         
         while (fat[db] != FAT_EOC && size > BLOCK_SIZE) {
+                printf("Traversing used fat\n");
                 db = fat[db];
                 size -= BLOCK_SIZE;
         }
+        printf("Traversed all pre-used fat\n");
+        printf("FAT[db]= %d\n", fat[db]);
 
+        /*
         if (size < BLOCK_SIZE) {
+                printf("Size before new blocks: %ld\n", size);
                 return alloc_count;
         }
-
+        */
+        
+        
         do {
+                printf("allocating new block\n");
                 int fatindex = -1;
                 for (int i = 1; i < superblock.datablockcount; i++) {
                         if (fat[i] == 0) {
                                 fatindex = i;
+                                printf("found a spot for next block\n");
                                 break;
                         }
                 }
         
                 if (fatindex == -1) {
+                        printf("did not find a spot for next block\n");
                         fat[db] = FAT_EOC;
                         return alloc_count;
                 }
 
                 fat[db] = fatindex;
                 db = fatindex;
-                size -= BLOCK_SIZE;
                 alloc_count++;
-        } while(size > BLOCK_SIZE);
+                if (size < 2*BLOCK_SIZE){
+                        break;
+                }
+                size -= BLOCK_SIZE;
+                
+        } while(1);
 
         fat[db] = FAT_EOC;
 
@@ -540,6 +555,7 @@ int fs_write(int fd, void *buf, size_t count)
                 offset += num_to_write;
                 db = fat[db];
                 if (db == FAT_EOC) {
+                        printf("breaking on empty FAT\n");
                         break;
                 }
         }
