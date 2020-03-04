@@ -202,6 +202,11 @@ int fs_create(const char *filename)
                         break;
                 }
         }
+        
+        if (fatindex == -1) {
+                return -1;
+        }
+
         rootdir[index].index = fatindex;
 
         return 0;
@@ -432,6 +437,60 @@ size_t min(size_t a, size_t b)
         }
 }
 
+uint32_t max(uint32_t a, uint32_t b) {
+        if (a > b) {
+                return a;
+        } else {
+                return b;
+        }
+}
+
+int alloc_blocks(int fd, size_t offset, size_t size)
+{
+        int db = get_datablock(fd, offset);
+        int alloc_count = 0;
+        size_t block_offset = offset % BLOCK_SIZE;
+        
+        if (size > BLOCK_SIZE - block_offset) {
+                size -= BLOCK_SIZE - block_offset;
+        } else {
+                return alloc_count;
+        }
+        
+        while (fat[db] != FAT_EOC && size > BLOCK_SIZE) {
+                db = fat[db];
+                size -= BLOCK_SIZE;
+        }
+
+        if (size < BLOCK_SIZE) {
+                return alloc_count;
+        }
+
+        do {
+                int fatindex = -1;
+                for (int i = 1; i < superblock.datablockcount; i++) {
+                        if (fat[i] == 0) {
+                                fatindex = i;
+                                break;
+                        }
+                }
+        
+                if (fatindex == -1) {
+                        fat[db] = FAT_EOC;
+                        return alloc_count;
+                }
+
+                fat[db] = fatindex;
+                db = fatindex;
+                size -= BLOCK_SIZE;
+                alloc_count++;
+        } while(size > BLOCK_SIZE);
+
+        fat[db] = FAT_EOC;
+
+        return alloc_count;
+}
+
 /** TODO: Phase 4
  * fs_write - Write to a file
  * @fd: File descriptor
@@ -453,7 +512,41 @@ size_t min(size_t a, size_t b)
  */
 int fs_write(int fd, void *buf, size_t count)
 {
-        return 0;
+        if (fd<0 || fd>31 || !strcmp(FDArray[fd].filename, "")){
+                return -1;
+        }
+
+        size_t start_offset = FDArray[fd].offset;
+        size_t offset = start_offset;
+        int db = get_datablock(fd, offset);
+        size_t num_written = 0;
+        char page_buffer[BLOCK_SIZE];
+
+        alloc_blocks(fd, offset, count);
+
+        while (num_written < count) {
+                size_t block_offset = offset % BLOCK_SIZE;
+                size_t num_to_write = min(BLOCK_SIZE - block_offset, count -
+                        num_written);
+
+                block_read(db + superblock.datablockindex, page_buffer);
+                memcpy(&page_buffer[block_offset], buf + num_written,
+                        num_to_write);
+                block_write(db + superblock.datablockindex, page_buffer);
+
+                num_written += num_to_write;
+                offset += num_to_write;
+                db = fat[db];
+                if (db == FAT_EOC) {
+                        break;
+                }
+        }
+        
+        FDArray[fd].offset = offset;
+        rootdir[FDArray[fd].fileIndex].size = max(start_offset + num_written, 
+                rootdir[FDArray[fd].fileIndex].size);
+        printf("Num_written: %ld\n", num_written);
+        return num_written;
 }
 
 /** TODO: Phase 4
@@ -496,6 +589,7 @@ int fs_read(int fd, void *buf, size_t count)
                         num_to_read);
 
                 num_read += num_to_read;
+                offset += num_to_read;
                 db = fat[db];
                 if (db == FAT_EOC) {
                         break;
