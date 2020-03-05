@@ -372,6 +372,10 @@ int alloc_blocks(int fd, size_t offset, size_t size)
                 size -= BLOCK_SIZE;
         }
 
+        if (fat[db] != FAT_EOC) {
+                return alloc_count;
+        }
+
         do {
                 int fatindex = -1;
                 for (int i = 1; i < superblock.datablockcount; i++) {
@@ -389,13 +393,13 @@ int alloc_blocks(int fd, size_t offset, size_t size)
                 db = fatindex;
                 fat[db] = FAT_EOC;
                 alloc_count++;
-                if (size < BLOCK_SIZE){
+                if (size <= BLOCK_SIZE){
                         break;
                 }
                 size -= BLOCK_SIZE;
                 
         } while(1);
-
+        
         return alloc_count;
 }
 
