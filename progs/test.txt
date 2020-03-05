@@ -1,1 +1,0 @@
-Size of file 'hello.txt' is 18 bytes
