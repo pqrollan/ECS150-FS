@@ -1,0 +1,4 @@
+#!/bin/bash
+./fs_make.x disk1.fs 4096
+./fs_ref.x add disk1.fs hello.txt
+./fs_ref.x add disk1.fs longfile.txt

@@ -445,6 +445,16 @@ uint32_t max(uint32_t a, uint32_t b) {
         }
 }
 
+void print_fileblocks(int fd) {
+        int db = rootdir[FDArray[fd].fileIndex].index;
+        do {
+                printf("%d -> ", db);
+                db = fat[db];
+        } while (db != FAT_EOC);
+
+        printf("\n");
+}
+
 int alloc_blocks(int fd, size_t offset, size_t size)
 {
         int db = get_datablock(fd, offset);
@@ -452,19 +462,19 @@ int alloc_blocks(int fd, size_t offset, size_t size)
         size_t block_offset = offset % BLOCK_SIZE;
         
         if (size > BLOCK_SIZE - block_offset) {
-                printf("Going to write in multiple blocks\n");
+                //printf("Going to write in multiple blocks\n");
                 size -= BLOCK_SIZE - block_offset;
         } else {
                 return alloc_count;
         }
         
         while (fat[db] != FAT_EOC && size > BLOCK_SIZE) {
-                printf("Traversing used fat\n");
+                //printf("Traversing used fat\n");
                 db = fat[db];
                 size -= BLOCK_SIZE;
         }
-        printf("Traversed all pre-used fat\n");
-        printf("FAT[db]= %d\n", fat[db]);
+        //printf("Traversed all pre-used fat\n");
+        //printf("FAT[db]= %d\n", fat[db]);
 
         /*
         if (size < BLOCK_SIZE) {
@@ -475,35 +485,34 @@ int alloc_blocks(int fd, size_t offset, size_t size)
         
         
         do {
-                printf("allocating new block\n");
+                //printf("allocating new block\n");
                 int fatindex = -1;
                 for (int i = 1; i < superblock.datablockcount; i++) {
                         if (fat[i] == 0) {
                                 fatindex = i;
-                                printf("found a spot for next block\n");
+                                //printf("found a spot for next block at index %d\n", i);
                                 break;
                         }
                 }
         
                 if (fatindex == -1) {
-                        printf("did not find a spot for next block\n");
+                        //printf("did not find a spot for next block\n");
                         fat[db] = FAT_EOC;
                         return alloc_count;
                 }
 
                 fat[db] = fatindex;
                 db = fatindex;
+                fat[db] = FAT_EOC;
                 alloc_count++;
-                if (size < 2*BLOCK_SIZE){
+                if (size < BLOCK_SIZE){
                         break;
                 }
                 size -= BLOCK_SIZE;
                 
         } while(1);
 
-        fat[db] = FAT_EOC;
-
-        printf("Allocated %d blocks\n", alloc_count);
+        //printf("Allocated %d blocks\n", alloc_count);
 
         return alloc_count;
 }
@@ -532,7 +541,7 @@ int fs_write(int fd, void *buf, size_t count)
         if (fd<0 || fd>31 || !strcmp(FDArray[fd].filename, "")){
                 return -1;
         }
-
+        //print_fileblocks(fd);
         size_t start_offset = FDArray[fd].offset;
         size_t offset = start_offset;
         int db = get_datablock(fd, offset);
@@ -540,8 +549,9 @@ int fs_write(int fd, void *buf, size_t count)
         char page_buffer[BLOCK_SIZE];
 
         alloc_blocks(fd, offset, count);
-
+        //print_fileblocks(fd);
         while (num_written < count) {
+                //printf("%d\n", db);
                 size_t block_offset = offset % BLOCK_SIZE;
                 size_t num_to_write = min(BLOCK_SIZE - block_offset, count -
                         num_written);
@@ -553,17 +563,18 @@ int fs_write(int fd, void *buf, size_t count)
 
                 num_written += num_to_write;
                 offset += num_to_write;
-                db = fat[db];
-                if (db == FAT_EOC) {
-                        printf("breaking on empty FAT\n");
+                if (fat[db] == FAT_EOC) {
+                        //printf("breaking on empty FAT\n");
                         break;
                 }
+                db = fat[db];
+
         }
-        
+
         FDArray[fd].offset = offset;
         rootdir[FDArray[fd].fileIndex].size = max(start_offset + num_written, 
                 rootdir[FDArray[fd].fileIndex].size);
-        printf("Num_written: %ld\n", num_written);
+        //printf("Num_written: %ld\n", num_written);
         return num_written;
 }
 

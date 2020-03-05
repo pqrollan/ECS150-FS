@@ -98,16 +98,18 @@ void long_write_offset()
 {
         fs_mount("disk1.fs");
 
+        fs_info();
+
         int file = fs_open("longfile.txt");
         printf("\n Long offset test\n");
         printf("size of file, start: %d\n", fs_stat(file));
 
-        char buffer[4000];
-        memset(buffer, 50, 4000);
+        char buffer[10000];
+        memset(buffer, 50, 10000);
 
         fs_lseek(file, fs_stat(file));
 
-        assert(fs_write(file, buffer, 4000) == 4000);
+        assert(fs_write(file, buffer, 10000) == 10000);
         
         fs_lseek(file, 0);
         char buffer1[fs_stat(file)+1];
