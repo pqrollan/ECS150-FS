@@ -284,12 +284,13 @@ int fs_ls(void)
         if (rootdir == NULL) {
                return -1; 
         }
+        printf("FS Ls:\n");
 
         for(int i = 0; i < FS_FILE_MAX_COUNT; i++) {
                 if (rootdir[i].filename[0] == 0) {
                         continue;
                 }
-                printf("%s- size:%d, FAT index:%d\n", rootdir[i].filename,
+                printf("file: %s, size: %d, data_blk: %d\n", rootdir[i].filename,
                         rootdir[i].size, rootdir[i].index);
         }
 
