@@ -62,7 +62,9 @@ int fs_mount(const char *diskname)
                 return -1;
         }
         for (int i = 0; i < superblock.fatblocks; i++) {
-	        block_read(1 + i, &fat[(i * BLOCK_SIZE)/2]);
+	        if (block_read(1 + i, &fat[(i * BLOCK_SIZE)/2])) {
+                        return -1;
+                }
         } 
 
         if (block_read(superblock.rootdirindex, rootdir)) {
@@ -347,22 +349,27 @@ int alloc_blocks(int fd, size_t offset, size_t size)
         int alloc_count = 0;
         size_t block_offset = offset % BLOCK_SIZE;
         
+        /* If the writing doesn't go to the next block, return */
         if (size > BLOCK_SIZE - block_offset) {
                 size -= BLOCK_SIZE - block_offset;
         } else {
                 return alloc_count;
         }
         
+        /* Traverse FAT until end of file or end of write amount */
         while (fat[db] != FAT_EOC && size > BLOCK_SIZE) {
                 db = fat[db];
                 size -= BLOCK_SIZE;
         }
 
+        /* If end of file is not reached, then no new allocation */
         if (fat[db] != FAT_EOC) {
                 return alloc_count;
         }
 
+        /* Allocate as many blocks as needed (min of 1) */
         do {
+                /* finding open FAT entry */
                 int fatindex = -1;
                 for (int i = 1; i < superblock.datablockcount; i++) {
                         if (fat[i] == 0) {
@@ -370,15 +377,19 @@ int alloc_blocks(int fd, size_t offset, size_t size)
                                 break;
                         }
                 }
+                /* if no new entries, exit */
                 if (fatindex == -1) {
                         fat[db] = FAT_EOC;
                         return alloc_count;
                 }
 
+                /* Assign next index at current element and move on */
                 fat[db] = fatindex;
                 db = fatindex;
                 fat[db] = FAT_EOC;
-                alloc_count++;
+                alloc_count++; /* increment num of allocs */
+
+                /* If no need for new block, exit loop */
                 if (size <= BLOCK_SIZE){
                         break;
                 }
