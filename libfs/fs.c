@@ -7,15 +7,6 @@
 #include "disk.h"
 #include "fs.h"
 
-/** Maximum filename length (including the NULL character) */
-//#define FS_FILENAME_LEN 16
-
-/** Maximum number of files in the root directory */
-//#define FS_FILE_MAX_COUNT 128
-
-/** Maximum number of open files */
-//#define FS_OPEN_MAX_COUNT 32
-
 #define BLOCK_SIZE 4096
 #define FAT_EOC 0xFFFF
 
@@ -54,7 +45,9 @@ int fs_mount(const char *diskname)
                 return -1;
         }
 
-        block_read(0, &superblock);
+        if (block_read(0, &superblock)) {
+                return -1;
+        }
         
         if (block_disk_count() != superblock.blockcount) {
                 return -1;
@@ -64,14 +57,17 @@ int fs_mount(const char *diskname)
                 return -1;
         }
 
-
-
         fat = malloc(superblock.fatblocks * BLOCK_SIZE);
+        if (fat == NULL) {
+                return -1;
+        }
         for (int i = 0; i < superblock.fatblocks; i++) {
 	        block_read(1 + i, &fat[(i * BLOCK_SIZE)/2]);
         } 
 
-        block_read(superblock.rootdirindex, rootdir);
+        if (block_read(superblock.rootdirindex, rootdir)) {
+                return -1;
+        }
 
         for (int i =0; i< FS_OPEN_MAX_COUNT; i++){
                 memset(FDArray[i].filename, 0, FS_FILENAME_LEN);
@@ -87,12 +83,16 @@ int fs_umount(void)
         }
 
         for (int i = 0; i < superblock.fatblocks; i++) {
-                block_write(1 + i, &fat[i * BLOCK_SIZE]);
+                if (block_write(1 + i, &fat[i * BLOCK_SIZE])) {
+                        return -1;
+                }
         }
 
         free(fat);
 
-        block_write(superblock.rootdirindex, rootdir);
+        if (block_write(superblock.rootdirindex, rootdir)) {
+                return -1;
+        }
 
         if (block_disk_close()) {
                 return -1;
@@ -222,8 +222,9 @@ int fs_ls(void)
                 if (rootdir[i].filename[0] == 0) {
                         continue;
                 }
-                printf("file: %s, size: %d, data_blk: %d\n", rootdir[i].filename,
-                        rootdir[i].size, rootdir[i].index);
+                printf("file: %s, size: %d, data_blk: %d\n", 
+                        rootdir[i].filename, rootdir[i].size,
+                        rootdir[i].index);
         }
 
         return 0;
@@ -275,21 +276,6 @@ int fs_close(int fd)
         FDArray[fd].fileIndex = FS_FILE_MAX_COUNT;
         return 0;
 }
-
-/* 
-void print_fdarray(void)
-{
-        for (int i=0; i<FS_OPEN_MAX_COUNT; i++){
-                if (strcmp(FDArray[i].filename, "")) {
-                        printf("Filename: %s\n", FDArray[i].filename);
-                        printf("File Descriptor: %d\n", i);
-                        printf("File Offset: %d\n", FDArray[i].offset);
-                        printf("Root Directory Index: %d\n",
-                        FDArray[i].fileIndex);
-                }
-        }
-
-}*/
 
 int fs_stat(int fd)
 {
@@ -420,10 +406,14 @@ int fs_write(int fd, void *buf, size_t count)
                 size_t num_to_write = min(BLOCK_SIZE - block_offset, count -
                         num_written);
 
-                block_read(db + superblock.datablockindex, page_buffer);
+                if (block_read(db + superblock.datablockindex, page_buffer)) {
+                        return -1;
+                }
                 memcpy(&page_buffer[block_offset], buf + num_written,
                         num_to_write);
-                block_write(db + superblock.datablockindex, page_buffer);
+                if (block_write(db + superblock.datablockindex, page_buffer)) {
+                        return -1;
+                }
 
                 num_written += num_to_write;
                 offset += num_to_write;
@@ -452,9 +442,12 @@ int fs_read(int fd, void *buf, size_t count)
 
         while (num_read < count) {
                 size_t block_offset = offset % BLOCK_SIZE;
-                size_t num_to_read = min(BLOCK_SIZE - block_offset, count - num_read);
+                size_t num_to_read = min(BLOCK_SIZE - block_offset,
+                        count - num_read);
 
-                block_read(db + superblock.datablockindex, page_buffer);
+                if (block_read(db + superblock.datablockindex, page_buffer)) {
+                        return -1;
+                }
                 memcpy(buf + num_read, &page_buffer[block_offset],
                         num_to_read);
 
